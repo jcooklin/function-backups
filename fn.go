@@ -109,17 +109,24 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1beta1.RunFunctionRequ
 		tmpMap := map[string]interface{}{}
 		for _, dr := range desired {
 			gvk := schema.FromAPIVersionAndKind(dr.Resource.GetAPIVersion(), dr.Resource.GetKind())
+			if dr.Resource.GetAnnotations()["service-platform.io/exclude-from-backup"] == "true" {
+				continue
+			}
 			tmpMap[fmt.Sprintf("%s.%s", gvk.Kind, gvk.Group)] = nil
 		}
 		for k := range tmpMap {
 			resourcesToBackup = append(resourcesToBackup, k)
 		}
 
-		b := backup.NewBackup(oxr.Resource.GetName(),
+		b, err := backup.NewBackup(oxr.Resource.GetName(),
 			claimNamespace,
 			backupStorageLocation,
 			resourcesToBackup,
 		)
+		if err != nil {
+			response.Fatal(rsp, errors.Wrapf(err, "creating backup"))
+			return rsp, nil
+		}
 		obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(b)
 		if err != nil {
 			response.Fatal(rsp, errors.Wrapf(err, "cannot convert backup to unstructured"))
@@ -130,15 +137,19 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1beta1.RunFunctionRequ
 		desired["composition-backup"] = desiredBackup
 		// are we configured to create a backup schedule?
 		if in.BackupSchedule != nil {
-			bs := backup.NewBackupSchedule(oxr.Resource.GetName(),
+			bs, err := backup.NewBackupSchedule(oxr.Resource.GetName(),
 				oxr.Resource.GetClaimReference().Namespace,
 				backupStorageLocation,
 				*in.BackupSchedule,
 				resourcesToBackup,
 			)
+			if err != nil {
+				response.Fatal(rsp, errors.Wrapf(err, "creating backup schedule"))
+				return rsp, nil
+			}
 			bsObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(bs)
 			if err != nil {
-				response.Fatal(rsp, errors.Wrapf(err, "cannot convert backup schedule to unstructured"))
+				response.Fatal(rsp, errors.Wrapf(err, "converting backup schedule to unstructured"))
 				return rsp, nil
 			}
 			desiredBackup := resource.NewDesiredComposed()

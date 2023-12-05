@@ -1,6 +1,9 @@
 package backup
 
-import ()
+import (
+	"encoding/json"
+	"github.com/crossplane/crossplane-runtime/pkg/errors"
+)
 
 type BackupTemplate struct {
 	StorageLocation         string   `json:"storageLocation"`
@@ -24,8 +27,8 @@ type Backup struct {
 	} `json:"spec"`
 }
 
-func NewBackup(name, claimNamespace, storageLocation string, resources []string) *Backup {
-	return &Backup{
+func NewBackup(name, claimNamespace, storageLocation string, resources []string) (*Object, error) {
+	backup := &Backup{
 		APIVersion: "velero.io/v1",
 		Kind:       "Backup",
 		Metadata: struct {
@@ -47,12 +50,16 @@ func NewBackup(name, claimNamespace, storageLocation string, resources []string)
 				}{
 					MatchLabels: map[string]string{
 						"service-platform.io/part-of-xr": name,
-						// "service-platform.io/claim-namespace": claimNamespace,
 					},
 				},
 			},
 		},
 	}
+	manifests, err := json.Marshal(backup)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot marshal backup schedule")
+	}
+	return wrap(name, string(manifests)), nil
 }
 
 type BackupSchedule struct {
@@ -69,8 +76,8 @@ type BackupSchedule struct {
 	} `json:"spec"`
 }
 
-func NewBackupSchedule(name, claimNamespace, storageLocation, cronSchedule string, resources []string) *BackupSchedule {
-	return &BackupSchedule{
+func NewBackupSchedule(name, claimNamespace, storageLocation, cronSchedule string, resources []string) (*Object, error) {
+	backup := &BackupSchedule{
 		APIVersion: "velero.io/v1",
 		Kind:       "Schedule",
 		Metadata: struct {
@@ -99,6 +106,50 @@ func NewBackupSchedule(name, claimNamespace, storageLocation, cronSchedule strin
 						// "service-platform.io/claim-namespace": claimNamespace,
 					},
 				},
+			},
+		},
+	}
+	manifests, err := json.Marshal(backup)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot marshal backup schedule")
+	}
+	return wrap(name, string(manifests)), nil
+}
+
+type Object struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Metadata   struct {
+		Name        string            `json:"name"`
+		Annotations map[string]string `json:"annotations,omitempty"`
+	} `json:"metadata"`
+	Spec struct {
+		ForProvider struct {
+			Manifest string `json:"manifest"`
+		} `json:"forProvider"`
+	} `json:"spec"`
+}
+
+func wrap(name, manifest string) *Object {
+	return &Object{
+		APIVersion: "kubernetes.crossplane.io/v1alpha1",
+		Kind:       "Object",
+		Metadata: struct {
+			Name        string            "json:\"name\""
+			Annotations map[string]string `json:"annotations,omitempty"`
+		}{
+			Name:        name,
+			Annotations: map[string]string{"service-platform.io/exclude-from-backup": "true"},
+		},
+		Spec: struct {
+			ForProvider struct {
+				Manifest string `json:"manifest"`
+			} `json:"forProvider"`
+		}{
+			ForProvider: struct {
+				Manifest string `json:"manifest"`
+			}{
+				Manifest: manifest,
 			},
 		},
 	}
