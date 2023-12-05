@@ -37,7 +37,7 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1beta1.RunFunctionRequ
 
 	rsp := response.To(req, response.DefaultTTL)
 
-	in := &v1beta1.Input{}
+	in := &v1beta1.Backup{}
 	if err := request.GetInput(req, in); err != nil {
 		response.Fatal(rsp, errors.Wrapf(err, "cannot get Function input from %T", req))
 		return rsp, nil
@@ -106,9 +106,13 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1beta1.RunFunctionRequ
 	c := oxr.Resource.GetCondition(xpv1.TypeReady)
 	if c.Status == corev1.ConditionTrue || backupExists {
 		resourcesToBackup := []string{}
+		tmpMap := map[string]interface{}{}
 		for _, dr := range desired {
 			gvk := schema.FromAPIVersionAndKind(dr.Resource.GetAPIVersion(), dr.Resource.GetKind())
-			resourcesToBackup = append(resourcesToBackup, fmt.Sprintf("%s.%s", gvk.Kind, gvk.Group))
+			tmpMap[fmt.Sprintf("%s.%s", gvk.Kind, gvk.Group)] = nil
+		}
+		for k := range tmpMap {
+			resourcesToBackup = append(resourcesToBackup, k)
 		}
 
 		b := backup.NewBackup(oxr.Resource.GetName(),

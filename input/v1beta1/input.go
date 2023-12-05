@@ -18,7 +18,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:storageversion
 // +kubebuilder:resource:categories=crossplane
-type Input struct {
+type Backup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
