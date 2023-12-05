@@ -63,9 +63,17 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1beta1.RunFunctionRequ
 		"xr-name", oxr.Resource.GetName(),
 	)
 
-	// If the composite resource is not ready, return nothing to do
+	// If the composite resource is not ready and we haven't created a backup MR yet, return nothing to do
 	c := oxr.Resource.GetCondition(xpv1.TypeReady)
-	if c.Status == corev1.ConditionFalse {
+	xrAnnotations := oxr.Resource.GetAnnotations()
+	if xrAnnotations == nil {
+		xrAnnotations = map[string]string{}
+	}
+	if _, ok := xrAnnotations["service-platform.io/initial-backup-created"]; c.Status == corev1.ConditionFalse && !ok {
+		log.Debug("Initial backup already created, skipping")
+		return rsp, nil
+	}
+	if c.Status == corev1.ConditionFalse && oxr.Resource.GetAnnotations()["service-platform.io/initial-backup-created"] != "true" {
 		log.Debug("Composite resource is not ready, skipping", "status", c.Status)
 		return rsp, nil
 	}
@@ -142,6 +150,17 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1beta1.RunFunctionRequ
 		desiredBackupSchedule.Resource.Object = bsObj
 		desired[resource.Name("composition-backup-schedule")] = desiredBackupSchedule
 
+	}
+
+	xrAnnotations["service-platform.io/initial-backup-created"] = "true"
+	if in.BackupSchedule != nil {
+		xrAnnotations["service-platform.io/initial-backup-schedule-created"] = "true"
+	}
+	oxr.Resource.SetAnnotations(xrAnnotations)
+	response.SetDesiredCompositeResource(rsp, oxr)
+	if err != nil {
+		response.Fatal(rsp, errors.Wrapf(err, "cannot set desired composed resources"))
+		return rsp, nil
 	}
 
 	err = response.SetDesiredComposedResources(rsp, desired)
