@@ -62,6 +62,11 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1beta1.RunFunctionRequ
 		"xr-kind", oxr.Resource.GetKind(),
 		"xr-name", oxr.Resource.GetName(),
 	)
+	c := oxr.Resource.GetCondition(xpv1.TypeReady)
+	if c.Status == corev1.ConditionFalse {
+		log.Debug("Composite resource is not ready, skipping", "status", c.Status)
+		return rsp, nil
+	}
 
 	// If the composite resource is opting out of backups, skip
 	if val, ok := oxr.Resource.GetAnnotations()["service-platform.io/backup-disabled"]; ok && strings.ToLower(val) == "true" {
@@ -81,10 +86,6 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1beta1.RunFunctionRequ
 		if name == "composition-backup" || name == "composition-backup-schedule" {
 			continue
 		}
-		// if dr.Resource.GetLabels() == nil {
-		// 	dr.Resource.SetLabels(map[string]string{})
-		// }
-		// dr.Resource.GetLabels()["service-platform.io/part-of-xr"] = oxr.Resource.GetName()
 		labels := dr.Resource.GetLabels()
 		if labels == nil {
 			labels = map[string]string{}
@@ -95,63 +96,51 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1beta1.RunFunctionRequ
 		dr.Resource.SetLabels(labels)
 	}
 
-	backupExists := false
-	if _, ok := desired["composition-backup"]; ok {
-		backupExists = true
+	resourcesToBackup := []string{}
+	tmpMap := map[string]interface{}{}
+	for _, dr := range desired {
+		gvk := schema.FromAPIVersionAndKind(dr.Resource.GetAPIVersion(), dr.Resource.GetKind())
+		if dr.Resource.GetAnnotations()["service-platform.io/exclude-from-backup"] == "true" {
+			continue
+		}
+		tmpMap[fmt.Sprintf("%s.%s", gvk.Kind, gvk.Group)] = nil
+	}
+	for k := range tmpMap {
+		resourcesToBackup = append(resourcesToBackup, k)
 	}
 
-	// If the composite resource is ready and we haven't already created a backup
-	// or if the backup/backupSchedule resource already exists we should calculate
-	// the backup CR
-	c := oxr.Resource.GetCondition(xpv1.TypeReady)
-	if c.Status == corev1.ConditionTrue || backupExists {
-		resourcesToBackup := []string{}
-		tmpMap := map[string]interface{}{}
-		for _, dr := range desired {
-			gvk := schema.FromAPIVersionAndKind(dr.Resource.GetAPIVersion(), dr.Resource.GetKind())
-			if dr.Resource.GetAnnotations()["service-platform.io/exclude-from-backup"] == "true" {
-				continue
-			}
-			tmpMap[fmt.Sprintf("%s.%s", gvk.Kind, gvk.Group)] = nil
-		}
-		for k := range tmpMap {
-			resourcesToBackup = append(resourcesToBackup, k)
-		}
-
-		b := backup.NewBackup(oxr.Resource.GetName(),
-			claimNamespace,
+	b := backup.NewBackup(oxr.Resource.GetName(),
+		claimNamespace,
+		backupStorageLocation,
+		resourcesToBackup,
+	)
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(b)
+	if err != nil {
+		response.Fatal(rsp, errors.Wrapf(err, "cannot convert backup to unstructured"))
+		return rsp, nil
+	}
+	desiredBackup := resource.NewDesiredComposed()
+	desiredBackup.Resource.Object = obj
+	desired[resource.Name("composition-backup")] = desiredBackup
+	// are we configured to create a backup schedule?
+	if in.BackupSchedule != nil {
+		bs := backup.NewBackupSchedule(oxr.Resource.GetName(),
+			oxr.Resource.GetClaimReference().Namespace,
 			backupStorageLocation,
+			*in.BackupSchedule,
 			resourcesToBackup,
 		)
-		obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(b)
+		bsObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(bs)
 		if err != nil {
-			response.Fatal(rsp, errors.Wrapf(err, "cannot convert backup to unstructured"))
+			response.Fatal(rsp, errors.Wrapf(err, "converting backup schedule to unstructured"))
 			return rsp, nil
 		}
-		desiredBackup := resource.NewDesiredComposed()
-		desiredBackup.Resource.Object = obj
-		desired["composition-backup"] = desiredBackup
-		// are we configured to create a backup schedule?
-		if in.BackupSchedule != nil {
-			bs := backup.NewBackupSchedule(oxr.Resource.GetName(),
-				oxr.Resource.GetClaimReference().Namespace,
-				backupStorageLocation,
-				*in.BackupSchedule,
-				resourcesToBackup,
-			)
-			bsObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(bs)
-			if err != nil {
-				response.Fatal(rsp, errors.Wrapf(err, "converting backup schedule to unstructured"))
-				return rsp, nil
-			}
-			desiredBackup := resource.NewDesiredComposed()
-			desiredBackup.Resource.Object = bsObj
-			desired["composition-backup-schedule"] = desiredBackup
-		}
+		desiredBackupSchedule := resource.NewDesiredComposed()
+		desiredBackupSchedule.Resource.Object = bsObj
+		desired[resource.Name("composition-backup-schedule")] = desiredBackupSchedule
 
-	} else {
-		log.Debug("Composite resource is  not ready and/or backup doesn't yet exist, skipping")
 	}
+
 	err = response.SetDesiredComposedResources(rsp, desired)
 	if err != nil {
 		response.Fatal(rsp, errors.Wrapf(err, "cannot set desired composed resources"))

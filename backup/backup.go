@@ -56,11 +56,9 @@ func NewBackup(name, claimNamespace, storageLocation string, resources []string)
 		APIVersion: "kubernetes.crossplane.io/v1alpha1",
 		Kind:       "Object",
 		Metadata: struct {
-			Name        string            "json:\"name\""
-			Annotations map[string]string `json:"annotations,omitempty"`
+			Name string "json:\"name\""
 		}{
-			Name:        name,
-			Annotations: map[string]string{"service-platform.io/exclude-from-backup": "true"},
+			Name: name,
 		},
 		Spec: struct {
 			ForProvider struct {
@@ -127,11 +125,9 @@ func NewBackupSchedule(name, claimNamespace, storageLocation, cronSchedule strin
 		APIVersion: "kubernetes.crossplane.io/v1alpha1",
 		Kind:       "Object",
 		Metadata: struct {
-			Name        string            "json:\"name\""
-			Annotations map[string]string `json:"annotations,omitempty"`
+			Name string "json:\"name\""
 		}{
-			Name:        name,
-			Annotations: map[string]string{"service-platform.io/exclude-from-backup": "true"},
+			Name: name,
 		},
 		Spec: struct {
 			ForProvider struct {
@@ -151,8 +147,7 @@ type BackupObject struct {
 	APIVersion string `json:"apiVersion"`
 	Kind       string `json:"kind"`
 	Metadata   struct {
-		Name        string            `json:"name"`
-		Annotations map[string]string `json:"annotations,omitempty"`
+		Name string `json:"name"`
 	} `json:"metadata"`
 	Spec struct {
 		ForProvider struct {
@@ -165,8 +160,7 @@ type BackupScheduleObject struct {
 	APIVersion string `json:"apiVersion"`
 	Kind       string `json:"kind"`
 	Metadata   struct {
-		Name        string            `json:"name"`
-		Annotations map[string]string `json:"annotations,omitempty"`
+		Name string `json:"name"`
 	} `json:"metadata"`
 	Spec struct {
 		ForProvider struct {
