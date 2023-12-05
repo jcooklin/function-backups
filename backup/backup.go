@@ -2,6 +2,8 @@ package backup
 
 import (
 	"encoding/json"
+	"strings"
+
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
 )
 
@@ -113,7 +115,7 @@ func NewBackupSchedule(name, claimNamespace, storageLocation, cronSchedule strin
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot marshal backup schedule")
 	}
-	return wrap(name, string(manifests)), nil
+	return wrap(name, strings.Trim(string(manifests), "{}")), nil
 }
 
 type Object struct {
