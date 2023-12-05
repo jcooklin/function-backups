@@ -62,6 +62,8 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1beta1.RunFunctionRequ
 		"xr-kind", oxr.Resource.GetKind(),
 		"xr-name", oxr.Resource.GetName(),
 	)
+
+	// If the composite resource is not ready, return nothing to do
 	c := oxr.Resource.GetCondition(xpv1.TypeReady)
 	if c.Status == corev1.ConditionFalse {
 		log.Debug("Composite resource is not ready, skipping", "status", c.Status)
@@ -83,6 +85,7 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1beta1.RunFunctionRequ
 
 	// Add backup labels to the desired composed resources
 	for name, dr := range desired {
+		//skip the backup MR and backup schedule MR
 		if name == "composition-backup" || name == "composition-backup-schedule" {
 			continue
 		}
