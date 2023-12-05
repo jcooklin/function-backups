@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.13.0
-  name: inputs.template.fn.crossplane.io
+  name: inputs.fn.service-platform.io
 spec:
-  group: template.fn.crossplane.io
+  group: fn.service-platform.io
   names:
     categories:
     - crossplane
@@ -26,9 +26,12 @@ spec:
               of an object. Servers should convert recognized schemas to the latest
               internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
-          example:
-            description: Example is an example field. Replace it with whatever input
-              you need. :)
+          backupSchedule:
+            description: BackupSchedule is the cron schedule for the backup job
+            type: string
+          backupStorageLocation:
+            description: BackupStorageLocation is the name of the storage location
+              to use for backups
             type: string
           kind:
             description: 'Kind is a string value representing the REST resource this
@@ -37,8 +40,6 @@ spec:
             type: string
           metadata:
             type: object
-        required:
-        - example
         type: object
     served: true
     storage: true
