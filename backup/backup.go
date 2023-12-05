@@ -1,11 +1,6 @@
 package backup
 
-import (
-	"encoding/json"
-	"strings"
-
-	"github.com/crossplane/crossplane-runtime/pkg/errors"
-)
+import ()
 
 type BackupTemplate struct {
 	StorageLocation         string   `json:"storageLocation"`
@@ -29,7 +24,7 @@ type Backup struct {
 	} `json:"spec"`
 }
 
-func NewBackup(name, claimNamespace, storageLocation string, resources []string) (*Object, error) {
+func NewBackup(name, claimNamespace, storageLocation string, resources []string) *BackupObject {
 	backup := &Backup{
 		APIVersion: "velero.io/v1",
 		Kind:       "Backup",
@@ -57,11 +52,28 @@ func NewBackup(name, claimNamespace, storageLocation string, resources []string)
 			},
 		},
 	}
-	manifests, err := json.Marshal(backup)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot marshal backup schedule")
+	return &BackupObject{
+		APIVersion: "kubernetes.crossplane.io/v1alpha1",
+		Kind:       "Object",
+		Metadata: struct {
+			Name        string            "json:\"name\""
+			Annotations map[string]string `json:"annotations,omitempty"`
+		}{
+			Name:        name,
+			Annotations: map[string]string{"service-platform.io/exclude-from-backup": "true"},
+		},
+		Spec: struct {
+			ForProvider struct {
+				Manifest Backup `json:"manifest"`
+			} `json:"forProvider"`
+		}{
+			ForProvider: struct {
+				Manifest Backup `json:"manifest"`
+			}{
+				Manifest: *backup,
+			},
+		},
 	}
-	return wrap(name, strings.Trim(string(manifests), "{}")), nil
 }
 
 type BackupSchedule struct {
@@ -78,7 +90,7 @@ type BackupSchedule struct {
 	} `json:"spec"`
 }
 
-func NewBackupSchedule(name, claimNamespace, storageLocation, cronSchedule string, resources []string) (*Object, error) {
+func NewBackupSchedule(name, claimNamespace, storageLocation, cronSchedule string, resources []string) *BackupScheduleObject {
 	backup := &BackupSchedule{
 		APIVersion: "velero.io/v1",
 		Kind:       "Schedule",
@@ -111,29 +123,7 @@ func NewBackupSchedule(name, claimNamespace, storageLocation, cronSchedule strin
 			},
 		},
 	}
-	manifests, err := json.Marshal(backup)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot marshal backup schedule")
-	}
-	return wrap(name, strings.Trim(string(manifests), "{}")), nil
-}
-
-type Object struct {
-	APIVersion string `json:"apiVersion"`
-	Kind       string `json:"kind"`
-	Metadata   struct {
-		Name        string            `json:"name"`
-		Annotations map[string]string `json:"annotations,omitempty"`
-	} `json:"metadata"`
-	Spec struct {
-		ForProvider struct {
-			Manifest string `json:"manifest"`
-		} `json:"forProvider"`
-	} `json:"spec"`
-}
-
-func wrap(name, manifest string) *Object {
-	return &Object{
+	return &BackupScheduleObject{
 		APIVersion: "kubernetes.crossplane.io/v1alpha1",
 		Kind:       "Object",
 		Metadata: struct {
@@ -145,14 +135,42 @@ func wrap(name, manifest string) *Object {
 		},
 		Spec: struct {
 			ForProvider struct {
-				Manifest string `json:"manifest"`
+				Manifest BackupSchedule `json:"manifest"`
 			} `json:"forProvider"`
 		}{
 			ForProvider: struct {
-				Manifest string `json:"manifest"`
+				Manifest BackupSchedule `json:"manifest"`
 			}{
-				Manifest: manifest,
+				Manifest: *backup,
 			},
 		},
 	}
+}
+
+type BackupObject struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Metadata   struct {
+		Name        string            `json:"name"`
+		Annotations map[string]string `json:"annotations,omitempty"`
+	} `json:"metadata"`
+	Spec struct {
+		ForProvider struct {
+			Manifest Backup `json:"manifest"`
+		} `json:"forProvider"`
+	} `json:"spec"`
+}
+
+type BackupScheduleObject struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Metadata   struct {
+		Name        string            `json:"name"`
+		Annotations map[string]string `json:"annotations,omitempty"`
+	} `json:"metadata"`
+	Spec struct {
+		ForProvider struct {
+			Manifest BackupSchedule `json:"manifest"`
+		} `json:"forProvider"`
+	} `json:"spec"`
 }
