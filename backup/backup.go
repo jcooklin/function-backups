@@ -61,7 +61,7 @@ func NewBackup(name, claimNamespace, storageLocation string, resources []string)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot marshal backup schedule")
 	}
-	return wrap(name, string(manifests)), nil
+	return wrap(name, strings.Trim(string(manifests), "{}")), nil
 }
 
 type BackupSchedule struct {
